@@ -14,7 +14,7 @@ const schema = mongoose.Schema({
 );
 
 class UserRoles extends mongoose.Model {
-
+    
 }
 
 schema.loadClass(UserRoles);
