@@ -4,7 +4,6 @@ const Categories = require("../db/models/Categories");
 const Response = require("../library/Response")
 const CustomError = require("../library/Error")
 const Enum = require("../config/Enum");
-const e = require('express');
 
 /* GET categories listing. */
 router.get('/', async(req, res, next)=> {
@@ -29,7 +28,7 @@ router.post("/add",async(req,res)=>{
 
     await category.save();
 
-    res.json(Response.successResponse({success:true}))
+    res.status(Enum.HTTP_CODES.CREATED).json(Response.successResponse({success:true},Enum.HTTP_CODES.CREATED))
      
   } catch (error) {
     let errorResponse = Response.errorResponse(error)
