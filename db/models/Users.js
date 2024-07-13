@@ -1,4 +1,9 @@
 const mongoose = require("mongoose")
+const {isValidEmail,isValidPassword} = require("../../config/check");
+const {HTTP_CODES}=require("../../config/Enum");
+const CustomError = require("../../library/Error");
+const crypto = require('crypto');
+
 
 const schema = mongoose.Schema({
     email:{type:String,required:true,unique:true},
@@ -18,6 +23,21 @@ const schema = mongoose.Schema({
 
 class Users extends mongoose.Model {
 
+    isValidPassword(password){
+        const hashedPassword = crypto
+        .createHash('md5')
+        .update(password)
+        .digest('hex');
+      
+        return hashedPassword === this.password;
+    }
+
+    static validateFieldsBeforeAuth(email,password){
+        if (!(isValidEmail(email) || isValidPassword(password) )) {
+            throw new CustomError(HTTP_CODES.UNAUTHORIZED,"Validation Error","email or password wrong")
+        }
+        return null;
+    }
 }
 
 schema.loadClass(Users);
