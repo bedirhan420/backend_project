@@ -2,7 +2,7 @@ const passport = require("passport");
 const { ExtractJwt, Strategy } = require("passport-jwt");
 const Users = require("../db/models/Users");
 const UserRoles = require("../db/models/UserRoles");
-const RolePrivileges = require("../db/models/RolePrivileges");
+const RolePrivileges = require("../db/models/RolePrevileges");
 const Response = require("./Response");
 const { HTTP_CODES } = require("../config/Enum");
 require("dotenv").config()
@@ -24,7 +24,7 @@ module.exports = function () {
 
                 let rolePrivileges = await RolePrivileges.find({ role_id: { $in: userRoles.map(ur => ur.role_id) } });
 
-                let privileges = rolePrivileges.map(rp => privs.privileges.find(x => x.key == rp.permission))
+                let privileges = rolePrivileges.map(rp => privs.priviligies.find(x => x.key == rp.permission))
 
                 done(null, {
                     id: user._id,

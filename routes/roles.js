@@ -8,16 +8,24 @@ const Enum = require("../config/Enum");
 const role_privileges = require("../config/role_privileges");
 const AuditLogs = require("../db/models/AuditLogs");
 const logger = require("../library/logger/loggerClass");
+const auth = require("../library/auth")();
+const i18n = new (require("../library/i18n"))(process.env.DEFAULT_LANG);
+const UserRoles = require("../db/models/UserRoles");
+
+
+router.all("*", auth.authenticate(),(req,res,next)=>{
+    next();
+} )
 
 /* GET roles listing. */
-router.get("/", async (req, res) => {
+router.get("/", auth.checkRoles("role_view") , async (req, res) => {
   try {
     let roles = await Roles.find({});
     res.json(Response.successResponse(roles));
     AuditLogs.info(req.user?.email, "Roles", "Get", "Fetched roles listing");
     logger.info(req.user?.email, "Roles", "Get", "Fetched roles listing");
   } catch (error) {
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
     AuditLogs.error(req.user?.email, "Roles", "Get", error.message);
     logger.error(req.user?.email, "Roles", "Get", error.message);
@@ -25,15 +33,10 @@ router.get("/", async (req, res) => {
 });
 
 /* POST roles listing. */
-router.post("/add", async (req, res) => {
+router.post("/add",auth.checkRoles("role_add") ,  async (req, res) => {
   let body = req.body;
   try {
-    if (!body.role_name)
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "name field must be filled"
-      );
+    if (!body.role_name) throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language),i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["role_name"]));
     if (
       !(
         body.permissions &&
@@ -41,11 +44,7 @@ router.post("/add", async (req, res) => {
         body.permissions.length > 0
       )
     )
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "permissions field must be an Array"
-      );
+    throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language),i18n.translate("COMMON.FIELD_MUST_BE_TYPE", req.user.language, ["permissions", "Array"]));
 
     let role = new Roles({
       role_name: body.role_name,
@@ -83,7 +82,7 @@ router.post("/add", async (req, res) => {
       `Added role: ${body.role_name}`
     );
   } catch (error) {
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
     AuditLogs.error(req.user?.email, "Roles", "Add", error.message);
     logger.error(req.user?.email, "Roles", "Add", error.message);
@@ -91,16 +90,15 @@ router.post("/add", async (req, res) => {
 });
 
 /* PUT roles listing. */
-router.put("/update", async (req, res) => {
+router.put("/update", auth.checkRoles("role_update"), async (req, res) => {
   let body = req.body;
   try {
-    if (!body._id)
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "_id field must be filled"
-      );
+    if (!body._id) {throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language),i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));}
+    let userRole = await UserRoles.findOne({user_id: req.user.id, role_id: body._id});
 
+    if (userRole) {
+        throw new CustomError(Enum.HTTP_CODES.FORBIDDEN, i18n.translate("COMMON.NEED_PERMISSIONS", req.user.language),i18n.translate("COMMON.NEED_PERMISSIONS", req.user.language));
+    }
     let updates = {};
     if (body.role_name) updates.role_name = body.role_name;
     if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
@@ -138,7 +136,10 @@ router.put("/update", async (req, res) => {
 
     await Roles.updateOne({ _id: body._id }, updates);
 
+    // Send the response before logging
     res.json(Response.successResponse({ success: true }));
+
+    // Logging after sending the response
     AuditLogs.info(
       req.user?.email,
       "Roles",
@@ -152,23 +153,21 @@ router.put("/update", async (req, res) => {
       `Updated role: ${body._id}`
     );
   } catch (error) {
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
+
+    // Error logging after sending the error response
     AuditLogs.error(req.user?.email, "Roles", "Update", error.message);
     logger.error(req.user?.email, "Roles", "Update", error.message);
   }
 });
 
+
 /* DELETE roles listing. */
-router.delete("/delete", async (req, res) => {
+router.delete("/delete", auth.checkRoles("role_delete") , async (req, res) => {
   let body = req.body;
   try {
-    if (!body._id)
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "_id field must be filled"
-      );
+    if (!body._id) throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language),i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
 
     const result = await Roles.deleteOne({ _id: body._id });
 
@@ -194,7 +193,7 @@ router.delete("/delete", async (req, res) => {
       `Deleted role: ${body._id}`
     );
   } catch (error) {
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
     AuditLogs.error(req.user?.email, "Roles", "Delete", error.message);
     logger.error(req.user?.email, "Roles", "Delete", error.message);
@@ -203,25 +202,25 @@ router.delete("/delete", async (req, res) => {
 
 router.get("/role_privileges", async (req, res) => {
   try {
+    // Fetch role privileges logic
     res.json(role_privileges);
-    AuditLogs.info(
-      req.user?.email,
-      "Role Privileges",
-      "Get",
-      "Fetched role privileges"
-    );
-    logger.info(
-      req.user?.email,
-      "Role Privileges",
-      "Get",
-      "Fetched role privileges"
-    );
+
+    // Log success
+    AuditLogs.info(req.user?.email, "Role Privileges", "Get", "Fetched role privileges");
+    logger.info(req.user?.email, "Role Privileges", "Get", "Fetched role privileges");
   } catch (error) {
-    let errorResponse = Response.errorResponse(error);
-    res.status(errorResponse.code).json(errorResponse);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
+    
+    // Ensure no duplicate response is sent
+    if (!res.headersSent) {
+      res.status(errorResponse.code).json(errorResponse);
+    }
+
+    // Log error
     AuditLogs.error(req.user?.email, "Role Privileges", "Get", error.message);
     logger.error(req.user?.email, "Role Privileges", "Get", error.message);
   }
 });
+
 
 module.exports = router;

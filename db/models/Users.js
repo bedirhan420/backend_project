@@ -3,6 +3,7 @@ const {isValidEmail,isValidPassword} = require("../../config/check");
 const {HTTP_CODES}=require("../../config/Enum");
 const CustomError = require("../../library/Error");
 const crypto = require('crypto');
+require("dotenv").config()
 
 
 const schema = mongoose.Schema({
@@ -11,7 +12,8 @@ const schema = mongoose.Schema({
     is_active:{type:Boolean,default:true},
     first_name:String,
     last_name:String,
-    phone_number:String},
+    phone_number:String,
+    language:{type:String,default:process.env.DEFAULT_LANG} },
     {
         versionKey:false,
         timestamps:{

@@ -3,8 +3,15 @@ const router = express.Router();
 const Response = require("../library/Response");
 const AuditLogs = require("../db/models/AuditLogs");
 const moment = require("moment");
+const auth = require("../library/auth")();
+const i18n = new (require("../library/i18n"))(process.env.DEFAULT_LANG);
 
-router.post('/', async (req, res) => {
+
+router.all("*", auth.authenticate(),(req,res,next)=>{
+    next();
+} )
+
+router.post('/',auth.checkRoles("auditlogs_view") ,async (req, res) => {
     let body = req.body;
     let query = {};
     let skip =0;
@@ -31,7 +38,7 @@ router.post('/', async (req, res) => {
             .sort({ created_at : -1 });
         res.json(Response.successResponse(auditLogs));
     } catch (error) {
-        let errorResponse = Response.errorResponse(error);
+        let errorResponse = Response.errorResponse(error,req.user?.language);
         res.status(errorResponse.code).json(errorResponse);
     }
 });
