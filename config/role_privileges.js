@@ -95,7 +95,7 @@ module.exports = {
         },
         // AuditLog Permissions
         {
-            key: "auditlog_view",
+            key: "auditlogs_view",
             name: "AuditLog View",
             group: "AUDITLOGS",
             desc: "View audit logs",

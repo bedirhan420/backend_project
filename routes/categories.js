@@ -6,9 +6,17 @@ const CustomError = require("../library/Error");
 const Enum = require("../config/Enum");
 const AuditLogs = require("../library/AuditLogs");
 const logger = require("../library/logger/loggerClass");
+const auth = require("../library/auth")();
+const i18n = new (require("../library/i18n"))(process.env.DEFAULT_LANG);
+const emitter = require("../library/Emitter");
+
+
+router.all("*", auth.authenticate(),(req,res,next)=>{
+    next();
+} )
 
 /* GET categories listing. */
-router.get("/", async (req, res) => {
+router.get("/", auth.checkRoles("category_view") ,async (req, res) => {
   try {
     let categories = await Categories.find({});
     AuditLogs.info(
@@ -21,20 +29,16 @@ router.get("/", async (req, res) => {
   } catch (error) {
     AuditLogs.error(req.user?.email, "Categories", "Get", error.message);
     logger.error(req.user?.email, "Categories", "Get", error.message);
-    res.json(Response.errorResponse(error));
+    res.json(Response.errorResponse(error,req.user?.language));
   }
 });
 
 /* POST categories listing. */
-router.post("/add", async (req, res) => {
+router.post("/add",auth.checkRoles("category_add" ) , async (req, res) => {
   let body = req.body;
   try {
-    if (!body.name)
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "name field must be filled"
-      );
+    if (!body.name) throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["name"]));
+
     let category = new Categories({
       name: body.name,
       is_active: true,
@@ -55,6 +59,7 @@ router.post("/add", async (req, res) => {
       "Add",
       `Added new category: ${category.name}`
     );
+    emitter.getEmitter("notifications").emit("messages", { message: category.name + " is added" });
 
     res
       .status(Enum.HTTP_CODES.CREATED)
@@ -64,21 +69,16 @@ router.post("/add", async (req, res) => {
   } catch (error) {
     AuditLogs.error(req.user?.email, "Categories", "Add", error.message);
     logger.error(req.user?.email, "Categories", "Add", error.message);
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
   }
 });
 
 /* PUT categories listing. */
-router.put("/update", async (req, res) => {
+router.put("/update", auth.checkRoles("category_update") ,async (req, res) => {
   let body = req.body;
   try {
-    if (!body._id)
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "_id field must be filled"
-      );
+    if (!body._id) throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
 
     let updates = {};
     if (body.name) updates.name = body.name;
@@ -103,21 +103,16 @@ router.put("/update", async (req, res) => {
   } catch (error) {
     AuditLogs.error(req.user?.email, "Categories", "Update", error.message);
     logger.error(req.user?.email, "Categories", "Update", error.message);
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
   }
 });
 
 /* DELETE categories listing. */
-router.delete("/delete", async (req, res) => {
+router.delete("/delete",auth.checkRoles("category_delete") , async (req, res) => {
   let body = req.body;
   try {
-    if (!body._id)
-      throw new CustomError(
-        Enum.HTTP_CODES.BAD_REQUEST,
-        "Validation Error",
-        "_id field must be filled"
-      );
+    if (!body._id) throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language), i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));
 
     const result = await Categories.deleteOne({ _id: body._id });
 
@@ -146,7 +141,7 @@ router.delete("/delete", async (req, res) => {
   } catch (error) {
     AuditLogs.error(req.user?.email, "Categories", "Delete", error.message);
     logger.error(req.user?.email, "Categories", "Delete", error.message);
-    let errorResponse = Response.errorResponse(error);
+    let errorResponse = Response.errorResponse(error,req.user?.language);
     res.status(errorResponse.code).json(errorResponse);
   }
 });
