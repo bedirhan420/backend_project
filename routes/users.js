@@ -18,7 +18,21 @@ require("dotenv").config()
 const jwt = require("jwt-simple");
 const auth = require("../library/auth")();
 const i18n = new (require("../library/i18n"))(process.env.DEFAULT_LANG);
+const {rateLimit} = require("express-rate-limit");
+const RateLimitMongo = require("rate-limit-mongo");
 
+
+const limiter = rateLimit({
+  store: new RateLimitMongo({
+    uri: process.env.CONNECTION_STRING,
+    collectionName: "rateLimits",
+    expireTimeMs: 15 * 60 * 1000 // 15 minutes
+  }),
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+  // standardHeaders: 'draft-7', // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+});
 
 /* Register users listing. */
 router.post("/register", async (req, res) => {
@@ -125,7 +139,7 @@ router.post("/register", async (req, res) => {
 });
 
 /* Auth users listing. */
-router.post("/auth", async (req, res) => {
+router.post("/auth",/*limiter,*/ async (req, res) => {
   try {
     let { email, password } = req.body;
 
@@ -133,9 +147,9 @@ router.post("/auth", async (req, res) => {
 
     let user = await Users.findOne({ email });
 
-    if (!user) throw new CustomError(Enum.HTTP_CODES.UNAUTHORIZED, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", config.DEFAULT_LANG), i18n.translate("USERS.AUTH_ERROR", config.DEFAULT_LANG));
+    if (!user) throw new CustomError(Enum.HTTP_CODES.UNAUTHORIZED, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", process.env.DEFAULT_LANG), i18n.translate("USERS.AUTH_ERROR", process.env.DEFAULT_LANG));
     
-    if(!user.isValidPassword(password)) throw new CustomError(Enum.HTTP_CODES.UNAUTHORIZED, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", config.DEFAULT_LANG), i18n.translate("USERS.AUTH_ERROR", config.DEFAULT_LANG));
+    if(!user.isValidPassword(password)) throw new CustomError(Enum.HTTP_CODES.UNAUTHORIZED, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", process.env.DEFAULT_LANG), i18n.translate("USERS.AUTH_ERROR",process.env.DEFAULT_LANG));
 
 
     let payload={
@@ -171,7 +185,11 @@ router.all("*", auth.authenticate(),(req,res,next)=>{
 /* GET users listing. */
 router.get("/", auth.checkRoles("user_view") , async (req, res) => {
   try {
-    let users = await Users.find({});
+    let users = await Users.find({},{password:0}).lean();
+    for (let i = 0; i < users.length; i++) {
+      let roles = await UserRoles.find({user_id:users[i]._id}).populate("role_id");
+      users[i].roles = roles;      
+    }
     res.json(Response.successResponse(users));
   } catch (error) {
     AuditLogs.error(req.user?.email, "Users", "Get", error.message);
@@ -257,6 +275,9 @@ router.put("/update",auth.checkRoles("user_update") ,  async (req, res) => {
     if (body.first_name) updates.first_name = body.first_name;
     if (body.last_name) updates.last_name = body.last_name;
     if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
+    
+    if (body._id == req.user.id)  body.roles =null;
+     
 
     if (Array.isArray(body.roles) && body.roles.length > 0) {
       let userRoles = await UserRoles.find({ user_id: body._id });

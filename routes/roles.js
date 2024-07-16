@@ -6,7 +6,7 @@ const Response = require("../library/Response");
 const CustomError = require("../library/Error");
 const Enum = require("../config/Enum");
 const role_privileges = require("../config/role_privileges");
-const AuditLogs = require("../db/models/AuditLogs");
+const AuditLogs = require("../library/AuditLogs");
 const logger = require("../library/logger/loggerClass");
 const auth = require("../library/auth")();
 const i18n = new (require("../library/i18n"))(process.env.DEFAULT_LANG);
@@ -20,7 +20,11 @@ router.all("*", auth.authenticate(),(req,res,next)=>{
 /* GET roles listing. */
 router.get("/", auth.checkRoles("role_view") , async (req, res) => {
   try {
-    let roles = await Roles.find({});
+    let roles = await Roles.find({}).lean();
+    for (let i = 0; i < roles.length; i++) {      
+      let permissions = await RolePrivileges.find({role_id:roles[i]._id});
+      roles[i].permissions = permissions;
+    }
     res.json(Response.successResponse(roles));
     AuditLogs.info(req.user?.email, "Roles", "Get", "Fetched roles listing");
     logger.info(req.user?.email, "Roles", "Get", "Fetched roles listing");
@@ -33,7 +37,7 @@ router.get("/", auth.checkRoles("role_view") , async (req, res) => {
 });
 
 /* POST roles listing. */
-router.post("/add",auth.checkRoles("role_add") ,  async (req, res) => {
+router.post("/add",auth.checkRoles("role_add") , async (req, res) => {
   let body = req.body;
   try {
     if (!body.role_name) throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language),i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["role_name"]));
@@ -94,11 +98,13 @@ router.put("/update", auth.checkRoles("role_update"), async (req, res) => {
   let body = req.body;
   try {
     if (!body._id) {throw new CustomError(Enum.HTTP_CODES.BAD_REQUEST, i18n.translate("COMMON.VALIDATION_ERROR_TITLE", req.user.language),i18n.translate("COMMON.FIELD_MUST_BE_FILLED", req.user.language, ["_id"]));}
+    
     let userRole = await UserRoles.findOne({user_id: req.user.id, role_id: body._id});
 
     if (userRole) {
         throw new CustomError(Enum.HTTP_CODES.FORBIDDEN, i18n.translate("COMMON.NEED_PERMISSIONS", req.user.language),i18n.translate("COMMON.NEED_PERMISSIONS", req.user.language));
     }
+    
     let updates = {};
     if (body.role_name) updates.role_name = body.role_name;
     if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
